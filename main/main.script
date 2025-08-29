@@ -286,7 +286,7 @@ end
 
 -- Animate image parts
 ---@param self game_script
----@return mesh_go
+---@return mesh_object
 local function example_4(self)
 	local mesh_go = create_mesh(self)
 
@@ -352,6 +352,7 @@ local function example_4(self)
 end
 
 ---@param self game_script
+---@return mesh_object
 local function example_5(self)
 	local mesh_go = create_mesh(self)
 
@@ -465,15 +466,19 @@ local amplitude = 10
 local frequency = 5
 local spatial_frequency = 0.05
 
+local amplitude_2 = 5
+local frequency_2 = 3
+local spatial_frequency_2 = 0.1
+
 local index_up = { [1] = true, [2] = true, [9] = true, [10] = true }
 local index_down = { [5] = true, [6] = true }
 
 ---@param self game_script
 ---@param dt number
 function update(self, dt)
-	if self.anim_mesh then
-		self.time = self.time + dt
+	self.time = self.time + dt
 
+	if self.anim_mesh then
 		-- Sin wave animation
 		local original_vertex
 		for index, n_vertex in ipairs(self.anim_mesh.indices) do
@@ -501,5 +506,20 @@ function update(self, dt)
 -- 			self.anim_mesh.positions[(index - 1) * 3 + 2] = original_vertex.y
 -- 			self.anim_mesh.positions[(index - 1) * 3 + 3] = original_vertex.z
 -- 		end
+	end
+
+	if self.anim_mesh_2 then
+		-- Primitive water wave animation
+		local original_vertex
+		for index, n_vertex in ipairs(self.anim_mesh_2.indices) do
+			original_vertex = vmath.vector3(self.anim_mesh_2.vertices[n_vertex])
+			local wave1 = math.sin(self.time * frequency_2 + original_vertex.x * spatial_frequency_2)
+			local wave2 = math.cos(self.time * frequency_2 * 0.5 + original_vertex.y * spatial_frequency_2 * 1.5)
+			original_vertex.z = (wave1 + wave2) * amplitude_2
+
+			self.anim_mesh_2.positions[(index - 1) * 3 + 1] = original_vertex.x
+			self.anim_mesh_2.positions[(index - 1) * 3 + 2] = original_vertex.y
+			self.anim_mesh_2.positions[(index - 1) * 3 + 3] = original_vertex.z
+		end
 	end
 end
