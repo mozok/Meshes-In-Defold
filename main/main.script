@@ -17,6 +17,7 @@ go.property("material_with_light", resource.material())
 ---@field indices integer[]|nil
 ---@field positions bufferstream
 ---@field texcoord0 bufferstream
+---@field normals bufferstream
 
 local H_MESH = hash("mesh")
 local PATCH_BUFFER = "/assets/models/patch_%s.bufferc"
@@ -375,27 +376,27 @@ local function example_5(self)
 	local rows = (height / step)
 	for r = 0, rows - 1 do
 		for c = 0, cols - 2 do
-			local i1 = r * cols + c + 1 -- Top-left
-			local i2 = (r + 1) * cols + c + 1 -- Bottom-left
-			local i3 = (r + 1) * cols + c + 2 -- Bottom-right
-			local i4 = r * cols + c + 2 -- Top-right
+			local i1 = r * cols + c + 1 -- Bottom-left
+			local i2 = (r + 1) * cols + c + 1 -- Top-left
+			local i3 = (r + 1) * cols + c + 2 -- Top-right
+			local i4 = r * cols + c + 2 -- Bottom-right
 
-			-- Triangle 1: Top-left, Bottom-left, Bottom-right
-			table.insert(mesh_go.indices, i1)
-			table.insert(mesh_go.indices, i3)
-			table.insert(mesh_go.indices, i2)
+			-- Triangle 1: Bottom-left, Top-right, Top-left
+			mesh_go.indices[#mesh_go.indices+1] = i1
+			mesh_go.indices[#mesh_go.indices+1] = i3
+			mesh_go.indices[#mesh_go.indices+1] = i2
 
-			-- Triangle 2: Top-left, Top-right, Bottom-right
-			table.insert(mesh_go.indices, i1)
-			table.insert(mesh_go.indices, i4)
-			table.insert(mesh_go.indices, i3)
+			-- Triangle 2: Bottom-left, Bottom-right, Top-right
+			mesh_go.indices[#mesh_go.indices+1] = i1
+			mesh_go.indices[#mesh_go.indices+1] = i4
+			mesh_go.indices[#mesh_go.indices+1] = i3
 		end
 	end
 
 	local buf = buffer.create(#mesh_go.indices * 3, {
 		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
 		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 },
-		{ name = hash("normal"), type = buffer.VALUE_TYPE_FLOAT32, count = 3 }
+		{ name = hash("normal"), type = buffer.VALUE_TYPE_FLOAT32, count = 3 } -- for light
 	})
 
 	mesh_go.positions = buffer.get_stream(buf, "position")
@@ -446,6 +447,7 @@ local function example_5(self)
 	go.set_position(vmath.vector3(700, 100, 0), mesh_go.go_id)
 	go.animate(mesh_go.go_id, "euler", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(60, 30, 0), go.EASING_OUTSINE, 1, 0.1)
 
+	-- Change material for one that has light calculation
 	go.set(mesh_go.mesh_url, hash("material"), self.material_with_light)
 	go.set(mesh_go.mesh_url, hash("light"), vmath.vector4(700, 700, 100, 1))
 
