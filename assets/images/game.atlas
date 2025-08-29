@@ -1,0 +1,7 @@
+images {
+  image: "/assets/images/green_8x8.png"
+}
+images {
+  image: "/assets/images/blue_8x16.png"
+}
+extrude_borders: 2

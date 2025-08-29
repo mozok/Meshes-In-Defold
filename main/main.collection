@@ -1,0 +1,46 @@
+name: "main"
+instances {
+  id: "square_base"
+  prototype: "/main/square/square_base.go"
+  position {
+    x: 199.0
+    y: 516.0
+  }
+  scale3 {
+    x: 100.0
+    y: 100.0
+  }
+}
+collection_instances {
+  id: "triangle"
+  collection: "/main/defold_example/triangle.collection"
+  position {
+    x: 100.0
+    y: 567.0
+  }
+}
+scale_along_z: 0
+embedded_instances {
+  id: "root"
+  data: "components {\n"
+  "  id: \"main\"\n"
+  "  component: \"/main/main.script\"\n"
+  "  properties {\n"
+  "    id: \"mesh_prefab\"\n"
+  "    value: \"/root#mesh_prefab\"\n"
+  "    type: PROPERTY_TYPE_URL\n"
+  "  }\n"
+  "  properties {\n"
+  "    id: \"game_atlas\"\n"
+  "    value: \"/assets/images/game.atlas\"\n"
+  "    type: PROPERTY_TYPE_HASH\n"
+  "  }\n"
+  "}\n"
+  "embedded_components {\n"
+  "  id: \"mesh_prefab\"\n"
+  "  type: \"factory\"\n"
+  "  data: \"prototype: \\\"/main/square/mesh_prefab.go\\\"\\n"
+  "\"\n"
+  "}\n"
+  ""
+}

@@ -1,0 +1,429 @@
+go.property("mesh_prefab", msg.url())
+go.property("game_atlas", resource.atlas())
+
+---@class game_script
+---@field mesh_prefab url
+---@field game_atlas resource
+---@field anim_mesh mesh_object|nil
+---@field time number
+
+---@class mesh_object
+---@field go_id hash
+---@field mesh_url url
+---@field vertices vector3[]|nil
+---@field indices integer[]|nil
+---@field positions bufferstream
+---@field texcoord0 bufferstream
+
+local H_MESH = hash("mesh")
+local PATCH_BUFFER = "/assets/models/patch_%s.bufferc"
+
+---@param self game_script
+---@return mesh_object
+local function create_mesh(self)
+	local object = {}
+	object.go_id = factory.create(self.mesh_prefab)
+	object.mesh_url = msg.url(object.go_id)
+	object.mesh_url.fragment = H_MESH
+
+	return object
+end
+
+--- Show square mesh with texture from atlas
+---@param self game_script
+local function example_1(self)
+	local mesh_go = create_mesh(self)
+
+	--- Vertice indices CCW
+	-- 1		1 - 4
+	-- | \		  \ |
+	-- 2 - 3	    3
+
+	local vertices = {
+		vmath.vector3(0, 100, 0),
+		vmath.vector3(0, 0, 0),
+		vmath.vector3(100, 0, 0),
+		vmath.vector3(100, 100, 0),
+	}
+	local indices = { 1, 2, 3, 1, 3, 4 }
+
+	-- create a buffer with a position and uv stream
+	local buf = buffer.create(#indices * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 } -- UVs
+	})
+
+	local positions = buffer.get_stream(buf, "position")
+	local texcoord0 = buffer.get_stream(buf, "texcoord0")
+
+	for index, n_vertex in ipairs(indices) do
+		positions[(index - 1) * 3 + 1] = vertices[n_vertex].x
+		positions[(index - 1) * 3 + 2] = vertices[n_vertex].y
+		positions[(index - 1) * 3 + 3] = vertices[n_vertex].z
+
+		-- UVs set just to test
+		texcoord0[(index - 1) * 2 + 1] = 0
+		texcoord0[(index - 1) * 2 + 2] = 1
+	end
+
+	local buffer_resource = resource.create_buffer(string.format(PATCH_BUFFER, 1), { buffer = buf })
+	go.set(mesh_go.mesh_url, "vertices", buffer_resource)
+
+	local atlas = resource.get_atlas(self.game_atlas)
+	go.set(mesh_go.mesh_url, "texture0", hash(atlas.texture))
+
+	go.set_position(vmath.vector3(100, 100, 0), mesh_go.go_id)
+end
+
+---@param atlas_geometry table
+---@param atlas_width number
+---@param atlas_height number
+local function atlas_to_mesh_uv(atlas_geometry, atlas_width, atlas_height)
+	-- Calculate UV bounds from all vertices
+	local min_u = math.huge
+	local max_u = -math.huge
+	local min_v = math.huge
+	local max_v = -math.huge
+
+	for i = 1, #atlas_geometry.uvs, 2 do
+		min_u = math.min(min_u, atlas_geometry.uvs[i])
+		max_u = math.max(max_u, atlas_geometry.uvs[i])
+		min_v = math.min(min_v, atlas_geometry.uvs[i + 1])
+		max_v = math.max(max_v, atlas_geometry.uvs[i + 1])
+	end
+
+	min_u  = min_u / atlas_width
+	max_u = max_u / atlas_width
+	min_v = min_v / atlas_height
+	max_v = max_v / atlas_height
+
+	local uvs = {
+		{ u = min_u,	v = 1 - min_v },
+		{ u = min_u,	v = 1 - max_v },
+		{ u = max_u,	v = 1 - max_v },
+		{ u = max_u,	v = 1 - min_v }
+	}
+
+	return uvs
+end
+
+--- Show mesh with image from atlas
+---@param self game_script
+local function example_2(self)
+	local mesh_go = create_mesh(self)
+	
+	local vertices = {
+		vmath.vector3(0, 100, 0),
+		vmath.vector3(0, 0, 0),
+		vmath.vector3(100, 0, 0),
+		vmath.vector3(100, 100, 0),
+	}
+
+	local indices = { 1, 2, 3, 1, 3, 4 }
+
+	-- create a buffer with a position and uv stream
+	local buf = buffer.create(#indices * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 } -- UVs
+	})
+
+	local positions = buffer.get_stream(buf, "position")
+	local texcoord0 = buffer.get_stream(buf, "texcoord0")
+
+	for index, n_vertex in ipairs(indices) do
+		positions[(index - 1) * 3 + 1] = vertices[n_vertex].x
+		positions[(index - 1) * 3 + 2] = vertices[n_vertex].y
+		positions[(index - 1) * 3 + 3] = vertices[n_vertex].z
+	end
+
+	local buffer_resource = resource.create_buffer(string.format(PATCH_BUFFER, 2), { buffer = buf })
+	go.set(mesh_go.mesh_url, "vertices", buffer_resource)
+
+	local atlas = resource.get_atlas(self.game_atlas)
+	go.set(mesh_go.mesh_url, "texture0", hash(atlas.texture))
+
+	-- Get size of the texture
+	local texture_info = resource.get_texture_info(atlas.texture)
+	
+	-- Set UVs from atlas data
+	local anim_id
+	-- Search for animation by name
+	for index, animation in ipairs(atlas.animations) do
+		if animation.id == "green_8x8" then
+			anim_id = index
+		end
+	end
+
+	-- Get geometry - image position in texture
+	local geometry = atlas.geometries[anim_id]
+	-- UV in atlas not in 0..1 coord system
+	-- for index, n_vertex in ipairs(geometry.indices) do
+	-- 	texcoord0[(index - 1) * 2 + 1] = geometry.uvs[(n_vertex * 2) + 1] / texture_info.width
+	-- 	-- texcoord0[(index - 1) * 2 + 2] = geometry.uvs[(n_vertex * 2) + 2] / texture_info.height -- gives shifted image
+	-- 	-- texcoord0[(index - 1) * 2 + 2] = 1 - geometry.uvs[(n_vertex * 2) + 2] / texture_info.height -- gives inverted image
+	-- end
+
+	local uvs = atlas_to_mesh_uv(geometry, texture_info.width, texture_info.height)
+	for index, n_vertex in ipairs(indices) do
+		texcoord0[(index - 1) * 2 + 1] = uvs[n_vertex].u
+		texcoord0[(index - 1) * 2 + 2] = uvs[n_vertex].v
+	end
+
+	go.set_position(vmath.vector3(250, 100, 0), mesh_go.go_id)
+end
+
+
+---@param atlas_geometry table
+---@param atlas_width number
+---@param atlas_height number
+local function rotated_atlas_to_mesh_uv(atlas_geometry, atlas_width, atlas_height)
+	local image_width = atlas_geometry.width
+	local image_height = atlas_geometry.height
+
+	-- Calculate UV bounds from all vertices
+	local min_u = math.huge
+	local max_u = -math.huge
+	local min_v = math.huge
+	local max_v = -math.huge
+
+	for i = 1, #atlas_geometry.uvs, 2 do
+		min_u = math.min(min_u, atlas_geometry.uvs[i])
+		max_u = math.max(max_u, atlas_geometry.uvs[i])
+		min_v = math.min(min_v, atlas_geometry.uvs[i + 1])
+		max_v = math.max(max_v, atlas_geometry.uvs[i + 1])
+	end
+
+	-- Detect rotation by comparing UV layout with geometry dimensions
+	local is_rotated = atlas_geometry.rotated -- Available in Defold 1.11.0
+	if is_rotated == nil then
+		local uv_width = math.abs(max_u - min_u)
+		local uv_height = math.abs(max_v - min_v)
+		is_rotated = (uv_width ~= image_width) or (uv_height ~= image_height)
+	end
+
+	min_u  = min_u / atlas_width
+	max_u = max_u / atlas_width
+	min_v = min_v / atlas_height
+	max_v = max_v / atlas_height
+
+	local uvs 
+	if is_rotated then
+		uvs = {
+			{ u = max_u,	v = 1 - min_v },
+			{ u = min_u,	v = 1 - min_v },
+			{ u = min_u,	v = 1 - max_v },
+			{ u = max_u,	v = 1 - max_v },
+		}
+	else
+		uvs = {
+			{ u = min_u,	v = 1 - min_v },
+			{ u = min_u,	v = 1 - max_v },
+			{ u = max_u,	v = 1 - max_v },
+			{ u = max_u,	v = 1 - min_v }
+		}
+	end
+
+	return uvs
+end
+
+--- Show mesh with rotated image from atlas
+---@param self game_script
+local function example_3(self)
+	local mesh_go = create_mesh(self)
+
+	local vertices = {
+		vmath.vector3(0, 200, 0),
+		vmath.vector3(0, 0, 0),
+		vmath.vector3(100, 0, 0),
+		vmath.vector3(100, 200, 0),
+	}
+
+	local indices = { 1, 2, 3, 1, 3, 4 }
+
+	-- create a buffer with a position and uv stream
+	local buf = buffer.create(#indices * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 } -- UVs
+	})
+
+	local positions = buffer.get_stream(buf, "position")
+	local texcoord0 = buffer.get_stream(buf, "texcoord0")
+
+	for index, n_vertex in ipairs(indices) do
+		positions[(index - 1) * 3 + 1] = vertices[n_vertex].x
+		positions[(index - 1) * 3 + 2] = vertices[n_vertex].y
+		positions[(index - 1) * 3 + 3] = vertices[n_vertex].z
+	end
+
+	local buffer_resource = resource.create_buffer(string.format(PATCH_BUFFER, 3), { buffer = buf })
+	go.set(mesh_go.mesh_url, "vertices", buffer_resource)
+
+	local atlas = resource.get_atlas(self.game_atlas)
+	go.set(mesh_go.mesh_url, "texture0", hash(atlas.texture))
+
+	-- TODO: explain geometry array and UV coordinates
+	local texture_info = resource.get_texture_info(atlas.texture)
+	-- Set UVs from atlas data
+	local anim_id
+	-- Search for animation by name
+	for index, animation in ipairs(atlas.animations) do
+		if animation.id == "blue_8x16" then
+			anim_id = index
+		end
+	end
+
+	local geometry = atlas.geometries[anim_id]
+	
+	-- local uvs = atlas_to_mesh_uv(geometry, texture_info.width, texture_info.height) -- do not process atlas rotation
+	local uvs = rotated_atlas_to_mesh_uv(geometry, texture_info.width, texture_info.height)
+	for index, n_vertex in ipairs(indices) do
+		texcoord0[(index - 1) * 2 + 1] = uvs[n_vertex].u
+		texcoord0[(index - 1) * 2 + 2] = uvs[n_vertex].v
+	end
+
+	go.set_position(vmath.vector3(400, 100, 0), mesh_go.go_id)
+end
+
+-- Animate image parts
+---@param self game_script
+---@return mesh_go
+local function example_4(self)
+	local mesh_go = create_mesh(self)
+
+	local width = 100
+	local height = 100
+	
+	-- More vertices
+	mesh_go.vertices = {
+		vmath.vector3(0, height, 0),
+		vmath.vector3(0, 0, 0),
+		vmath.vector3(width * 0.25, height, 0),
+		vmath.vector3(width * 0.25, 0, 0),
+		vmath.vector3(width * 0.5, height, 0),
+		vmath.vector3(width * 0.5, 0, 0),
+		vmath.vector3(width * 0.75, height, 0),
+		vmath.vector3(width * 0.75, 0, 0),
+		vmath.vector3(width, height, 0),
+		vmath.vector3(width, 0, 0)
+	}
+
+	mesh_go.indices = { 1, 2, 4, 1, 4, 3, 3, 4, 6, 3, 6, 5, 5, 6, 8, 5, 8, 7, 7, 8, 10, 7, 10, 9 }
+
+	local buf = buffer.create(#mesh_go.indices * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 }
+	})
+
+	mesh_go.positions = buffer.get_stream(buf, "position")
+	mesh_go.texcoord0 = buffer.get_stream(buf, "texcoord0")
+
+	for index, n_vertex in ipairs(mesh_go.indices) do
+		mesh_go.positions[(index - 1) * 3 + 1] = mesh_go.vertices[n_vertex].x
+		mesh_go.positions[(index - 1) * 3 + 2] = mesh_go.vertices[n_vertex].y
+		mesh_go.positions[(index - 1) * 3 + 3] = mesh_go.vertices[n_vertex].z
+	end
+
+	local buffer_resource = resource.create_buffer(string.format(PATCH_BUFFER, 4), { buffer = buf })
+	go.set(mesh_go.mesh_url, "vertices", buffer_resource)
+
+	local atlas = resource.get_atlas(self.game_atlas)
+	go.set(mesh_go.mesh_url, "texture0", hash(atlas.texture))
+
+	local texture_info = resource.get_texture_info(atlas.texture)
+	local anim_id
+	for index, animation in ipairs(atlas.animations) do
+		if animation.id == "green_8x8" then
+			anim_id = index
+		end
+	end
+
+	local geometry = atlas.geometries[anim_id]
+
+	local uvs = rotated_atlas_to_mesh_uv(geometry, texture_info.width, texture_info.height)
+	local uv_width = uvs[3].u - uvs[1].u
+	for index, n_vertex in ipairs(mesh_go.indices) do
+		mesh_go.texcoord0[(index - 1) * 2 + 1] = uvs[1].u + (mesh_go.vertices[n_vertex].x / width) * uv_width 
+		mesh_go.texcoord0[(index - 1) * 2 + 2] = mesh_go.vertices[n_vertex].y == 0 and uvs[2].v or uvs[1].v
+	end
+
+	go.set_position(vmath.vector3(550, 100, 0), mesh_go.go_id)
+
+	return mesh_go
+end
+
+---@param self game_script
+local function example_5(self)
+	local mesh_go = create_mesh(self)
+
+	local width = 100
+	local height = 200
+
+	local step = 25
+	local x, y = 0, 0
+	mesh_go.vertices = {}
+	
+
+	return mesh_go
+end
+
+---@param self game_script
+function init(self)
+	example_1(self)
+	example_2(self)
+	example_3(self)
+	self.anim_mesh = example_4(self)
+	self.anim_mesh_2 = example_5(self)
+
+	self.time = 0
+end
+
+---@param self game_script
+function final(self)
+	resource.release(string.format(PATCH_BUFFER, 1))
+	resource.release(string.format(PATCH_BUFFER, 2))
+	resource.release(string.format(PATCH_BUFFER, 3))
+	resource.release(string.format(PATCH_BUFFER, 4))
+end
+
+local amplitude = 10
+local frequency = 5
+local spatial_frequency = 0.05
+
+local index_up = { [1] = true, [2] = true, [9] = true, [10] = true }
+local index_down = { [5] = true, [6] = true }
+
+---@param self game_script
+---@param dt number
+function update(self, dt)
+	if self.anim_mesh then
+		self.time = self.time + dt
+
+		-- Sin wave animation
+		local original_vertex
+		for index, n_vertex in ipairs(self.anim_mesh.indices) do
+			original_vertex = vmath.vector3(self.anim_mesh.vertices[n_vertex])
+			original_vertex.y = original_vertex.y + math.sin(self.time * frequency + original_vertex.x * spatial_frequency) * amplitude
+
+			self.anim_mesh.positions[(index - 1) * 3 + 1] = original_vertex.x
+			self.anim_mesh.positions[(index - 1) * 3 + 2] = original_vertex.y
+			self.anim_mesh.positions[(index - 1) * 3 + 3] = original_vertex.z
+		end
+
+		-- V stretch animatioin
+-- 		local original_vertex
+-- 		for index, n_vertex in ipairs(self.anim_mesh.indices) do
+-- 			original_vertex = vmath.vector3(self.anim_mesh.vertices[n_vertex])
+-- 			if index_up[n_vertex] then
+-- 				original_vertex.x = original_vertex.x + math.sin(self.time * frequency) * amplitude
+-- 				original_vertex.y = original_vertex.y + math.sin(self.time * frequency) * amplitude * 2
+-- 			elseif index_down[n_vertex] then
+-- 				original_vertex.x = original_vertex.x - math.sin(self.time * frequency) * amplitude
+-- 				original_vertex.y = original_vertex.y - math.sin(self.time * frequency) * amplitude * 2
+-- 			end
+-- 
+-- 			self.anim_mesh.positions[(index - 1) * 3 + 1] = original_vertex.x
+-- 			self.anim_mesh.positions[(index - 1) * 3 + 2] = original_vertex.y
+-- 			self.anim_mesh.positions[(index - 1) * 3 + 3] = original_vertex.z
+-- 		end
+	end
+end
