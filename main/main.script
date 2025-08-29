@@ -1,10 +1,13 @@
 go.property("mesh_prefab", msg.url())
 go.property("game_atlas", resource.atlas())
+go.property("material_with_light", resource.material())
 
 ---@class game_script
 ---@field mesh_prefab url
 ---@field game_atlas resource
+---@field material_with_light resource
 ---@field anim_mesh mesh_object|nil
+---@field anim_mesh_2 mesh_object|nil
 ---@field time number
 
 ---@class mesh_object
@@ -391,16 +394,22 @@ local function example_5(self)
 
 	local buf = buffer.create(#mesh_go.indices * 3, {
 		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
-		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 }
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 },
+		{ name = hash("normal"), type = buffer.VALUE_TYPE_FLOAT32, count = 3 }
 	})
 
 	mesh_go.positions = buffer.get_stream(buf, "position")
 	mesh_go.texcoord0 = buffer.get_stream(buf, "texcoord0")
+	mesh_go.normals = buffer.get_stream(buf, "normal")
 
 	for index, n_vertex in ipairs(mesh_go.indices) do
 		mesh_go.positions[(index - 1) * 3 + 1] = mesh_go.vertices[n_vertex].x
 		mesh_go.positions[(index - 1) * 3 + 2] = mesh_go.vertices[n_vertex].y
 		mesh_go.positions[(index - 1) * 3 + 3] = mesh_go.vertices[n_vertex].z
+
+		mesh_go.normals[(index - 1) * 3 + 1] = 1
+		mesh_go.normals[(index - 1) * 3 + 2] = 100
+		mesh_go.normals[(index - 1) * 3 + 3] = 1
 	end
 
 	local buffer_resource = resource.create_buffer(string.format(PATCH_BUFFER, 5), { buffer = buf })
@@ -435,7 +444,10 @@ local function example_5(self)
 	end
 
 	go.set_position(vmath.vector3(700, 100, 0), mesh_go.go_id)
-	go.animate(mesh_go.go_id, "euler", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(60, 30, 0), go.EASING_OUTSINE, 1)
+	go.animate(mesh_go.go_id, "euler", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(60, 30, 0), go.EASING_OUTSINE, 1, 0.1)
+
+	go.set(mesh_go.mesh_url, hash("material"), self.material_with_light)
+	go.set(mesh_go.mesh_url, hash("light"), vmath.vector4(700, 700, 100, 1))
 
 	return mesh_go
 end
