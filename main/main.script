@@ -357,17 +357,92 @@ local function example_5(self)
 
 	local width = 100
 	local height = 200
-
 	local step = 25
-	local x, y = 0, 0
+
 	mesh_go.vertices = {}
-	
+	for y = 0, height, step do
+		for x = 0, width, step do
+			table.insert(mesh_go.vertices, vmath.vector3(x, y, 0))
+		end
+	end
+
+	mesh_go.indices = {}
+	local cols = (width / step) + 1
+	local rows = (height / step)
+	for r = 0, rows - 1 do
+		for c = 0, cols - 2 do
+			local i1 = r * cols + c + 1 -- Top-left
+			local i2 = (r + 1) * cols + c + 1 -- Bottom-left
+			local i3 = (r + 1) * cols + c + 2 -- Bottom-right
+			local i4 = r * cols + c + 2 -- Top-right
+
+			-- Triangle 1: Top-left, Bottom-left, Bottom-right
+			table.insert(mesh_go.indices, i1)
+			table.insert(mesh_go.indices, i3)
+			table.insert(mesh_go.indices, i2)
+
+			-- Triangle 2: Top-left, Top-right, Bottom-right
+			table.insert(mesh_go.indices, i1)
+			table.insert(mesh_go.indices, i4)
+			table.insert(mesh_go.indices, i3)
+		end
+	end
+
+	local buf = buffer.create(#mesh_go.indices * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 }
+	})
+
+	mesh_go.positions = buffer.get_stream(buf, "position")
+	mesh_go.texcoord0 = buffer.get_stream(buf, "texcoord0")
+
+	for index, n_vertex in ipairs(mesh_go.indices) do
+		mesh_go.positions[(index - 1) * 3 + 1] = mesh_go.vertices[n_vertex].x
+		mesh_go.positions[(index - 1) * 3 + 2] = mesh_go.vertices[n_vertex].y
+		mesh_go.positions[(index - 1) * 3 + 3] = mesh_go.vertices[n_vertex].z
+	end
+
+	local buffer_resource = resource.create_buffer(string.format(PATCH_BUFFER, 5), { buffer = buf })
+	go.set(mesh_go.mesh_url, "vertices", buffer_resource)
+
+	local atlas = resource.get_atlas(self.game_atlas)
+	go.set(mesh_go.mesh_url, "texture0", hash(atlas.texture))
+
+	local texture_info = resource.get_texture_info(atlas.texture)
+	local anim_id
+	for index, animation in ipairs(atlas.animations) do
+		if animation.id == "blue_8x16" then
+			anim_id = index
+		end
+	end
+
+	if anim_id then
+		local geometry = atlas.geometries[anim_id]
+
+		local uvs = rotated_atlas_to_mesh_uv(geometry, texture_info.width, texture_info.height)
+
+		local min_u, max_u = uvs[2].u, uvs[1].u
+		local min_v, max_v = uvs[3].v, uvs[1].v
+		local uv_width = max_u - min_u
+		local uv_height = max_v - min_v
+
+		for index, n_vertex in ipairs(mesh_go.indices) do
+			local vertex = mesh_go.vertices[n_vertex]
+			mesh_go.texcoord0[(index - 1) * 2 + 1] = min_u + (vertex.y / height) * uv_width
+			mesh_go.texcoord0[(index - 1) * 2 + 2] = min_v + (1 - (vertex.x / width)) * uv_height
+		end
+	end
+
+	go.set_position(vmath.vector3(700, 100, 0), mesh_go.go_id)
+	go.animate(mesh_go.go_id, "euler", go.PLAYBACK_ONCE_FORWARD, vmath.vector3(60, 30, 0), go.EASING_OUTSINE, 1)
 
 	return mesh_go
 end
 
 ---@param self game_script
 function init(self)
+	msg.post("@render:", "use_fixed_fit_projection", { near = -1000, far = 1000 })
+
 	example_1(self)
 	example_2(self)
 	example_3(self)
@@ -383,6 +458,7 @@ function final(self)
 	resource.release(string.format(PATCH_BUFFER, 2))
 	resource.release(string.format(PATCH_BUFFER, 3))
 	resource.release(string.format(PATCH_BUFFER, 4))
+	resource.release(string.format(PATCH_BUFFER, 5))
 end
 
 local amplitude = 10
