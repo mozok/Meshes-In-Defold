@@ -355,6 +355,7 @@ local function example_4(self)
 	return mesh_go
 end
 
+-- Rectangle mesh for wave animation
 ---@param self game_script
 ---@return mesh_object
 local function example_5(self)
@@ -455,6 +456,92 @@ local function example_5(self)
 end
 
 ---@param self game_script
+local function example_6(self)
+	local mesh_1 = create_mesh(self)
+	local mesh_2 = create_mesh(self)
+
+	local vertices = {
+		vmath.vector3(0, 100, 0),
+		vmath.vector3(0, 0, 0),
+		vmath.vector3(100, 0, 0),
+		vmath.vector3(100, 100, 0),
+	}
+
+	local indices_1 = { 1, 2, 3 }
+	local indices_2 = { 1, 3, 4 }
+
+	-- Prepare Mesh 1 geometry
+	local buf_1 = buffer.create(#indices_1 * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 }
+	})
+
+	local positions_1 = buffer.get_stream(buf_1, "position")
+	local texcoord0_1 = buffer.get_stream(buf_1, "texcoord0")
+
+	for index, n_vertex in ipairs(indices_1) do
+		positions_1[(index - 1) * 3 + 1] = vertices[n_vertex].x
+		positions_1[(index - 1) * 3 + 2] = vertices[n_vertex].y
+		positions_1[(index - 1) * 3 + 3] = vertices[n_vertex].z
+	end
+
+	local buffer_resource_1 = resource.create_buffer(string.format(PATCH_BUFFER, "6_1"), { buffer = buf_1 })
+	go.set(mesh_1.mesh_url, "vertices", buffer_resource_1)
+
+
+	-- Prepare Mesh 2 geometry
+	local buf_2 = buffer.create(#indices_2 * 3, {
+		{ name = hash("position"), type=buffer.VALUE_TYPE_FLOAT32, count = 3 },
+		{ name = hash("texcoord0"), type = buffer.VALUE_TYPE_FLOAT32, count = 2 }
+	})
+
+	local positions_2 = buffer.get_stream(buf_2, "position")
+	local texcoord0_2 = buffer.get_stream(buf_2, "texcoord0")
+
+	for index, n_vertex in ipairs(indices_2) do
+		positions_2[(index - 1) * 3 + 1] = vertices[n_vertex].x
+		positions_2[(index - 1) * 3 + 2] = vertices[n_vertex].y
+		positions_2[(index - 1) * 3 + 3] = vertices[n_vertex].z
+	end
+
+	local buffer_resource_2 = resource.create_buffer(string.format(PATCH_BUFFER, "6_2"), { buffer = buf_2 })
+	go.set(mesh_2.mesh_url, "vertices", buffer_resource_2)
+
+
+	-- Set UVs
+	local atlas = resource.get_atlas(self.game_atlas)
+	go.set(mesh_1.mesh_url, "texture0", hash(atlas.texture))
+	go.set(mesh_2.mesh_url, "texture0", hash(atlas.texture))
+	
+	local texture_info = resource.get_texture_info(atlas.texture)
+
+	local anim_id
+	for index, animation in ipairs(atlas.animations) do
+		if animation.id == "green_8x8" then
+			anim_id = index
+		end
+	end
+
+	local geometry = atlas.geometries[anim_id]
+
+	local uvs = rotated_atlas_to_mesh_uv(geometry, texture_info.width, texture_info.height)
+	for index, n_vertex in ipairs(indices_1) do
+		texcoord0_1[(index - 1) * 2 + 1] = uvs[n_vertex].u
+		texcoord0_1[(index - 1) * 2 + 2] = uvs[n_vertex].v
+	end
+	for index, n_vertex in ipairs(indices_2) do
+		texcoord0_2[(index - 1) * 2 + 1] = uvs[n_vertex].u
+		texcoord0_2[(index - 1) * 2 + 2] = uvs[n_vertex].v
+	end
+
+	go.set_position(vmath.vector3(100, 300, 0), mesh_1.go_id)
+	go.set_position(vmath.vector3(100, 300, 0), mesh_2.go_id)
+
+	go.animate(mesh_1.go_id, "position", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(75, 275, 0), go.EASING_INSINE, 1)
+	go.animate(mesh_2.go_id, "position", go.PLAYBACK_LOOP_PINGPONG, vmath.vector3(125, 325, 0), go.EASING_INSINE, 1)
+end
+
+---@param self game_script
 function init(self)
 	msg.post("@render:", "use_fixed_fit_projection", { near = -1000, far = 1000 })
 
@@ -463,6 +550,7 @@ function init(self)
 	example_3(self)
 	self.anim_mesh = example_4(self)
 	self.anim_mesh_2 = example_5(self)
+	example_6(self)
 
 	self.time = 0
 end
@@ -474,6 +562,8 @@ function final(self)
 	resource.release(string.format(PATCH_BUFFER, 3))
 	resource.release(string.format(PATCH_BUFFER, 4))
 	resource.release(string.format(PATCH_BUFFER, 5))
+	resource.release(string.format(PATCH_BUFFER, "6_1"))
+	resource.release(string.format(PATCH_BUFFER, "6_2"))
 end
 
 local amplitude = 10
